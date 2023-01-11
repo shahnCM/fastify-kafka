@@ -1,0 +1,20 @@
+{
+  "name": "bl_app_user_activity_publisher",
+  "version": "1.0.0",
+  "description": "Publishes activities of mybl_app users to the bl_kafka brokers",
+  "main": "server.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "dev": "nodemon server.js"
+  },
+  "author": "Mahir",
+  "license": "ISC",
+  "dependencies": {
+    "@fastify/env": "^4.2.0",
+    "fastify": "^4.11.0",
+    "kafkajs": "^2.2.3"
+  },
+  "devDependencies": {
+    "nodemon": "^2.0.20"
+  }
+}
