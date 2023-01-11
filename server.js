@@ -15,21 +15,22 @@ const envSchema = {
         'APP_ENV',
         'APP_HOST',
         'APP_PORT',
+        'MSG_SECRET',
         'KAFKA_HOST',
         'KAFKA_PORT',
-        'KAFKA_CLIENT_ID',
         'KAFKA_BROKER_1',
-        'MSG_SECRET'
+        'KAFKA_CLIENT_ID',
     ],
     properties: {
-        APP_ENV: { type: 'string', default: 'dev' },
-        APP_HOST: { type: 'string', default: '0.0.0.0' },
-        APP_PORT: { type: 'number', default: 8000 },
-        KAFKA_HOST: { type: 'string', default: 'kafka' },
-        KAFKA_PORT: { type: 'number', default: 9092 },
-        KAFKA_CLIENT_ID: { type: 'string', default: 'bl-kafka' }, 
-        KAFKA_BROKER_1 : { type: 'string', default: 'kafka:9092' },
-        MSG_SECRET: { type: 'string', default: 'secret' }
+        APP_ENV:            { type: 'string', default: 'dev' },
+        APP_HOST:           { type: 'string', default: '0.0.0.0' },
+        APP_PORT:           { type: 'number', default: 8000 },
+        MSG_SECRET:         { type: 'string', default: 'secret' },
+        KAFKA_HOST:         { type: 'string', default: 'kafka' },
+        KAFKA_PORT:         { type: 'number', default: 9092 },
+        KAFKA_BROKER_1 :    { type: 'string', default: 'kafka:9092' },
+        KAFKA_CLIENT_ID:    { type: 'string', default: 'bl-kafka' },
+        
     }
 };
 
