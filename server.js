@@ -15,22 +15,24 @@ const envSchema = {
         'APP_ENV',
         'APP_HOST',
         'APP_PORT',
-        'MSG_SECRET',
+        'SPELL_SECRET',
         'KAFKA_HOST',
         'KAFKA_PORT',
         'KAFKA_BROKER_1',
         'KAFKA_CLIENT_ID',
+        'KAFKA_TOPIC'
     ],
     properties: {
         APP_ENV:            { type: 'string', default: 'dev' },
         APP_HOST:           { type: 'string', default: '0.0.0.0' },
         APP_PORT:           { type: 'number', default: 8000 },
-        MSG_SECRET:         { type: 'string', default: 'secret' },
+        SPELL_SECRET:       { type: 'string', default: 'secret' },
+        SPELL_TIMEOUT:      { type: 'number', default: 30 },
         KAFKA_HOST:         { type: 'string', default: 'kafka' },
         KAFKA_PORT:         { type: 'number', default: 9092 },
         KAFKA_BROKER_1 :    { type: 'string', default: 'kafka:9092' },
         KAFKA_CLIENT_ID:    { type: 'string', default: 'bl-kafka' },
-        
+        KAFKA_TOPIC:        { type: 'string', default: 'test-topic' },
     }
 };
 
@@ -77,10 +79,10 @@ const kafkaProducerInitiate = _ => {
 const authOk = spell => new Promise((res, rej) => {
     const [signature, timestamp] = spell.split('.')
     signature === crypto
-        .createHmac('sha256', fastify.config.MSG_SECRET)
+        .createHmac('sha256', fastify.config.SPELL_SECRET)
         .update(timestamp)
         .digest('hex')
-    && Math.round(Date.now()/1000 - timestamp/1000) <= 3000
+    && Math.round(Date.now()/1000 - timestamp/1000) <= fastify.config.SPELL_TIMEOUT
     ? res(true)
     : rej(UNAUTHORIZED)
 })
@@ -94,7 +96,7 @@ const produceMessage = message => fastify
     .kafka
     .connect()
     .then(_ => fastify.kafka.send({
-        topic: 'test-topic',
+        topic: fastify.config.KAFKA_TOPIC,
         messages: [
             { value: JSON.stringify(message) },
         ],
@@ -121,7 +123,7 @@ fastify.register(fastifyEnv, envOptions).ready(err => err ? console.log(err) : k
  */
 fastify.get('/', (req, rep) => {
     const timestamp = Date.now()
-    return rep.code(200).send({ spell: crypto.createHmac('sha256', fastify.config.MSG_SECRET).update(`${timestamp}`).digest('hex') + `.${timestamp}` })
+    return rep.code(200).send({ spell: crypto.createHmac('sha256', fastify.config.SPELL_SECRET).update(`${timestamp}`).digest('hex') + `.${timestamp}` })
 })
 
 /**
