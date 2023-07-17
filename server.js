@@ -77,14 +77,15 @@ const kafkaProducerInitiate = _ => {
  * @returns Promise
  */
 const authOk = spell => new Promise((res, rej) => {
-    const [signature, timestamp] = spell.split('.')
-    signature === crypto
-        .createHmac('sha256', fastify.config.SPELL_SECRET)
-        .update(timestamp)
-        .digest('hex')
-    && Math.round(Date.now()/1000 - timestamp/1000) <= fastify.config.SPELL_TIMEOUT
-    ? res(true)
-    : rej(UNAUTHORIZED)
+    res(true)
+    // const [signature, timestamp] = spell.split('.')
+    // signature === crypto
+    //     .createHmac('sha256', fastify.config.SPELL_SECRET)
+    //     .update(timestamp)
+    //     .digest('hex')
+    // && Math.round(Date.now()/1000 - timestamp/1000) <= fastify.config.SPELL_TIMEOUT
+    // ? res(true)
+    // : rej(UNAUTHORIZED)
 })
 
 /**
