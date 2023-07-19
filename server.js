@@ -2,9 +2,12 @@ const crypto            = require('crypto');
 const kafkaJs           = require('kafkajs')
 const fastifyEnv        = require('@fastify/env')
 const fastify           = require('fastify')({ logger: false })
+const socketIoRedis     = require("@socket.io/redis-emitter");
+const redis             = require("redis");
 
 const UNAUTHORIZED      = '::UNAUTHORIZED::'
 const KAFKA_CONN_ERR    = '::KAFKA CONNECTION ERROR::'
+const REDIS_CONN_ERR    = '::REDIS CONNECTION ERROR::'
 
 /**
  * env Schema for Fastify Env
@@ -20,7 +23,9 @@ const envSchema = {
         'KAFKA_PORT',
         'KAFKA_BROKER_1',
         'KAFKA_CLIENT_ID',
-        'KAFKA_TOPIC'
+        'KAFKA_TOPIC',
+        'REDIS_HOST',
+        'REDIS_PORT'
     ],
     properties: {
         APP_ENV:            { type: 'string', default: 'dev' },
@@ -33,6 +38,8 @@ const envSchema = {
         KAFKA_BROKER_1 :    { type: 'string', default: 'kafka:9092' },
         KAFKA_CLIENT_ID:    { type: 'string', default: 'bl-kafka' },
         KAFKA_TOPIC:        { type: 'string', default: 'test-topic' },
+        REDIS_HOST:         { type: 'string', default: 'redis' },
+        REDIS_PORT:         { type: 'number', default: 6379 },
     }
 };
 
@@ -53,22 +60,36 @@ const envOptions = {
  * @returns 
  */
 const kafkaDecorater = _ => fastify.decorate('kafka', kafkaProducerInitiate())
-
-/**
- * Starts Fastify App Server
- * @param {*} _ 
- * @returns NULL
- */
-const fastifyServerStart = _ => fastify.listen({ host: fastify.config.APP_HOST, port: fastify.config.APP_PORT }, err => err && fastify.log.error(err) & process.exit(1))
+const redisDecorater = _ => fastify.decorate('redis', RedisPublisherInitiate())
 
 /**
  * Initiates Kafka Producer
  * @param {*} _ 
  * @returns Promise
  */
-const kafkaProducerInitiate = _ => {
-    try { return (new kafkaJs.Kafka({ clientId: fastify.config.KAFKA_CLIENT_ID, brokers: [fastify.config.KAFKA_BROKER_1] })).producer() } 
-    catch(e) { console.log(KAFKA_CONN_ERR, e) }
+const kafkaProducerInitiate = async _ => {
+    try { 
+        const producer = (new kafkaJs.Kafka({ clientId: fastify.config.KAFKA_CLIENT_ID, brokers: [fastify.config.KAFKA_BROKER_1] })).producer()
+        await producer.connect()
+        return producer 
+    } catch(e) { 
+        console.log(KAFKA_CONN_ERR, e) 
+    }
+}
+
+/**
+ * Initiates Redis for socket
+ * @param {*} _ 
+ * @returns Promise
+ */
+const RedisPublisherInitiate = async _ => {
+    try { 
+        const redisClient = redis.createClient({ url: `redis://${fastify.config.REDIS_HOST}:${fastify.config.REDIS_PORT}`})
+        await redisClient.connect()
+        return new socketIoRedis.Emitter(redisClient)
+    } catch(e) { 
+        console.log(REDIS_CONN_ERR, e) 
+    }
 }
 
 /**
@@ -93,17 +114,18 @@ const authOk = spell => new Promise((res, rej) => {
  * @param {*} message 
  * @returns Promise
  */
-const produceMessage = message => fastify
-    .kafka
-    .connect()
-    .then(_ => fastify.kafka.send({
-        topic: fastify.config.KAFKA_TOPIC,
-        messages: [
-            { value: JSON.stringify(message) },
-        ],
-    }))
-    .then(_ => fastify.kafka.disconnect())
+const produceMessage = message => fastify.kafka
+    .then(producer => producer.send({topic: fastify.config.KAFKA_TOPIC, messages: [{ value: JSON.stringify(message) }]}))
     .catch(e => console.log(KAFKA_CONN_ERR, e))
+
+/**
+ * Emits message to redis publisher
+ * @param {*} message 
+ * @returns Promise
+ */
+const publishMessage = ({name, message}) => fastify.redis
+    .then(emitter => emitter.emit(name, message))
+    .catch(e => console.log(REDIS_CONN_ERR, e))     
 
 /**
  * SERVER 
@@ -111,7 +133,14 @@ const produceMessage = message => fastify
  * PORT: 8000
  * Initiates Kafka clients before starting server
  */    
-fastify.register(fastifyEnv, envOptions).ready(err => err ? console.log(err) : kafkaDecorater() & fastifyServerStart())
+fastify.register(fastifyEnv, envOptions).ready(err => err ? console.log(err) : kafkaDecorater() & redisDecorater() & fastifyServerStart())
+
+/**
+ * Starts Fastify App Server
+ * @param {*} _ 
+ * @returns NULL
+ */
+const fastifyServerStart = _ => fastify.listen({ host: fastify.config.APP_HOST, port: fastify.config.APP_PORT }, err => err && fastify.log.error(err) & process.exit(1))
 
 /**
  * GET SAMPLE TOKEN
@@ -136,4 +165,15 @@ fastify.get('/', (req, rep) => {
  *      status: 'OK' 
  * }
  */
-fastify.post('/', (req, rep) => rep.code(200).send({ status: 'OK' }) & authOk(req.headers['spell']).then(_ => produceMessage(req.body)).catch(e => console.log(e)))
+fastify.post('/kafka-producer', (req, rep) => rep.code(200).send({ status: 'OK' }) & authOk(req.headers['spell']).then(_ => produceMessage(req.body)).catch(e => console.log(e)))
+
+/**
+ * PRODUCE MESSAGE THROUGH REDIS PUBSUB
+ * INPUT: ANY JSON OBJECT
+ * OUTPUT: OK
+ * OUTPUT FORMAT: 
+ * {
+ *      status: 'OK' 
+ * }
+ */
+fastify.post('/redis-publisher', (req, rep) => rep.code(200).send({ status: 'OK' }) & authOk(req.headers['spell']).then(_ => publishMessage(req.body)).catch(e => console.log(e)))
